@@ -1,11 +1,11 @@
 # Authensor for OpenClaw (Hosted Beta)
 
-**One job:** make marketplace skills fail-closed so your keys don’t get used without you knowing.
+**One job:** stop risky marketplace actions from running without you knowing.
 
 ## 3-Step Quickstart
 1. Install the **Authensor Gateway** skill from the OpenClaw marketplace.
-2. Request a demo key (email delivered).
-3. Paste the key once, start a new session, and run any marketplace skill. It will be blocked by default and a receipt will be created.
+2. Request a demo key (Google Form → keys emailed automatically).
+3. Paste the key once, start a new session, and run any marketplace skill.
 
 ## Add Your Demo Key
 Edit `~/.openclaw/openclaw.json` (JSON5) and add:
@@ -45,33 +45,22 @@ If you use sandboxed OpenClaw sessions, also add:
 }
 ```
 
-## What You Get
-- Marketplace skills **fail-closed** by default.
-- Every attempt creates a **receipt** you can review.
-- Hosted control plane, no local database or server required.
+## How Approvals Work (No Pain)
+- **Low-risk actions run automatically.**
+- **High-risk actions require owner confirmation** (approval) before execution.
+- **Known-dangerous actions are blocked.**
+
+That means you’re not approving every single step — only the risky ones.
 
 ## Demo Tier Limits
 - Sandbox mode only (no real API calls)
 - Tight rate limits
 - Short receipt retention
+- Custom policies unlocked on paid tiers
 
-## Request Demo Key
-This repo includes a tiny form + API that emails demo keys.
-
-### Deploy the key-issuer
-Set env vars:
-- `CONTROL_PLANE_URL`
-- `AUTHENSOR_ADMIN_TOKEN`
-- `RESEND_API_KEY`
-- `RESEND_FROM`
-
-Start locally:
-```bash
-npm install
-npm start
-```
-
-Open `http://localhost:3000` and request a key.
+## Request Demo Key (No Server)
+We use **Google Form + Apps Script** so there’s no public API to run.
+See `apps-script/README.md` to set it up in under 10 minutes.
 
 ## OpenClaw References
 - Skills config: `https://docs.openclaw.ai/tools/skills-config`
