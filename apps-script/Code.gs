@@ -4,29 +4,43 @@ function onFormSubmit(e) {
     if (!email) return;
 
     if (isRateLimited(email)) return;
+    if (!isEmailAllowed(email)) return;
 
     var baseUrl = getProp('CONTROL_PLANE_URL');
     var adminToken = getProp('AUTHENSOR_ADMIN_TOKEN');
+    var trialDays = parseInt(getPropOptional('DEMO_TRIAL_DAYS', '7'), 10);
+    var upgradeUrl = getPropOptional('UPGRADE_URL', '');
 
     var id = shortHash(email);
     var ingest = createKey(baseUrl, adminToken, 'demo-ingest-' + id, 'ingest');
     var executor = createKey(baseUrl, adminToken, 'demo-executor-' + id, 'executor');
 
-    var body = [
+    storeDemoKey(email, ingest.keyId, 'ingest');
+    storeDemoKey(email, executor.keyId, 'executor');
+
+    var bodyLines = [
       'Your Authensor demo keys:',
       '',
       'CONTROL_PLANE_URL: ' + baseUrl,
-      'EXECUTOR KEY (OpenClaw): ' + executor,
-      'INGEST KEY (SDK only): ' + ingest,
+      'EXECUTOR KEY (OpenClaw): ' + executor.token,
+      'INGEST KEY (SDK only): ' + ingest.token,
+      '',
+      'Trial: ' + trialDays + ' days (keys auto-expire).',
       '',
       'OpenClaw setup (add to ~/.openclaw/openclaw.json):',
       'skills: { entries: { "authensor-gateway": { enabled: true, env: {',
       '  CONTROL_PLANE_URL: "' + baseUrl + '",',
-      '  AUTHENSOR_API_KEY: "' + executor + '"',
+      '  AUTHENSOR_API_KEY: "' + executor.token + '"',
       '} } } }',
       '',
-      'Full setup guide: https://github.com/AUTHENSOR/Authensor-for-OpenClaw',
-    ].join('\\n');
+      'Full setup guide: https://github.com/AUTHENSOR/Authensor-for-OpenClaw'
+    ];
+
+    if (upgradeUrl) {
+      bodyLines.push('Upgrade: ' + upgradeUrl);
+    }
+
+    var body = bodyLines.join('\\n');
 
     MailApp.sendEmail({
       to: email,
@@ -182,6 +196,103 @@ function markEmailed(receiptId) {
   PropertiesService.getScriptProperties().setProperty('approval_sent_' + receiptId, String(Date.now()));
 }
 
+// --- Demo key lifecycle ---
+// Optional Script Properties:
+// DEMO_TRIAL_DAYS (default 7)
+// DEMO_EMAIL_ALLOWLIST (comma-separated domains, e.g. "gmail.com,example.com")
+// UPGRADE_URL (link included in expiry email)
+
+function isEmailAllowed(email) {
+  var allowlist = getPropOptional('DEMO_EMAIL_ALLOWLIST', '');
+  if (!allowlist) return true;
+  var domain = String(email || '').split('@')[1] || '';
+  var allowed = allowlist.split(',').map(function (d) { return d.trim().toLowerCase(); }).filter(Boolean);
+  return allowed.indexOf(domain.toLowerCase()) !== -1;
+}
+
+function storeDemoKey(email, keyId, role) {
+  if (!keyId) return;
+  var props = PropertiesService.getScriptProperties();
+  var payload = {
+    email: email,
+    keyId: keyId,
+    role: role,
+    issuedAt: Date.now(),
+    revoked: false
+  };
+  props.setProperty('demo_key_' + keyId, JSON.stringify(payload));
+}
+
+function revokeExpiredDemoKeys() {
+  try {
+    var baseUrl = getProp('CONTROL_PLANE_URL');
+    var adminToken = getProp('AUTHENSOR_ADMIN_TOKEN');
+    var trialDays = parseInt(getPropOptional('DEMO_TRIAL_DAYS', '7'), 10);
+    var props = PropertiesService.getScriptProperties();
+    var all = props.getProperties();
+    var now = Date.now();
+    var cutoffMs = trialDays * 24 * 60 * 60 * 1000;
+
+    Object.keys(all).forEach(function (key) {
+      if (key.indexOf('demo_key_') !== 0) return;
+      var data;
+      try { data = JSON.parse(all[key]); } catch { return; }
+      if (!data || data.revoked) return;
+      if (!data.issuedAt || (now - Number(data.issuedAt) < cutoffMs)) return;
+
+      revokeKeyById(baseUrl, adminToken, data.keyId);
+      data.revoked = true;
+      props.setProperty(key, JSON.stringify(data));
+
+      if (!wasUpgradeSent(data.email)) {
+        sendUpgradeEmail(data.email, trialDays);
+        markUpgradeSent(data.email);
+      }
+    });
+  } catch (err) {
+    Logger.log(err && err.message ? err.message : err);
+  }
+}
+
+function revokeKeyById(baseUrl, token, keyId) {
+  if (!keyId) return;
+  var url = baseUrl.replace(/\/$/, '') + '/keys/' + keyId + '/revoke';
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+}
+
+function wasUpgradeSent(email) {
+  if (!email) return false;
+  var props = PropertiesService.getScriptProperties();
+  return !!props.getProperty('upgrade_sent_' + shortHash(email));
+}
+
+function markUpgradeSent(email) {
+  if (!email) return;
+  PropertiesService.getScriptProperties().setProperty('upgrade_sent_' + shortHash(email), String(Date.now()));
+}
+
+function sendUpgradeEmail(email, trialDays) {
+  if (!email) return;
+  var upgradeUrl = getPropOptional('UPGRADE_URL', '');
+  var body = [
+    'Your Authensor demo key has expired.',
+    '',
+    'Trial length: ' + trialDays + ' days.',
+    'Upgrade to keep protections and unlock higher limits, custom policies, and longer retention.',
+    '',
+    upgradeUrl ? ('Upgrade: ' + upgradeUrl) : 'Reply to this email to upgrade.'
+  ].join('\\n');
+
+  MailApp.sendEmail({
+    to: email,
+    subject: 'Your Authensor demo has ended',
+    body: body,
+  });
+}
+
 function getPropOptional(name, fallback) {
   var value = PropertiesService.getScriptProperties().getProperty(name);
   return value ? value : fallback;
@@ -238,5 +349,5 @@ function createKey(baseUrl, token, name, role) {
   });
   var data = JSON.parse(res.getContentText());
   if (!data || !data.token) throw new Error('Key create failed');
-  return data.token;
+  return { token: data.token, keyId: data.keyId, createdAt: data.createdAt };
 }

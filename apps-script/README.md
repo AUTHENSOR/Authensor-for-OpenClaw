@@ -12,6 +12,9 @@ This issues demo keys and emails them from your Google Workspace account (e.g. `
    - `APPROVAL_SIGNING_SECRET` = random string (keep private)
    - `APPROVAL_WEBAPP_URL` = Apps Script web app exec URL
    - `APPROVAL_NOTIFY_EMAIL` = your email address
+   - `DEMO_TRIAL_DAYS` = `7` (optional)
+   - `DEMO_EMAIL_ALLOWLIST` = `gmail.com,company.com` (optional)
+   - `UPGRADE_URL` = `https://your-upgrade-page` (optional)
 5. Create a trigger:
    - **Triggers → Add Trigger**
    - Choose function: `onFormSubmit`
@@ -22,12 +25,18 @@ This issues demo keys and emails them from your Google Workspace account (e.g. `
    - Choose function: `sendApprovalEmails`
    - Event source: `Time-driven`
    - Frequency: Every 5 minutes
-6. Submit the form once to test.
+7. Create a time trigger for demo key expiry:
+   - **Triggers → Add Trigger**
+   - Choose function: `revokeExpiredDemoKeys`
+   - Event source: `Time-driven`
+   - Frequency: Daily
+8. Submit the form once to test.
 
 ## Notes
 - The script sends email as the Google account that owns the script.
 - Keep the admin token private and rotate if leaked.
 - Rate limiting is built-in (one issuance per email per day).
+ - Demo keys can auto-expire after `DEMO_TRIAL_DAYS` (default 7).
 
 ## Approvals (Email Links)
 This script can send approval emails and handle approve/reject links.
