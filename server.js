@@ -97,7 +97,7 @@ app.post('/api/request-demo-key', async (req, res) => {
     const ingest = await createKey({ role: 'ingest', name: `demo-ingest-${id}` });
     const executor = await createKey({ role: 'executor', name: `demo-executor-${id}` });
 
-    const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'https://<your-control-plane>.onrender.com';
+    const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'https://authensor-control-plane.onrender.com';
 
     const message = [
       'Your Authensor demo keys:',
