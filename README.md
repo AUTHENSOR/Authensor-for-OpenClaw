@@ -5,7 +5,7 @@
 ## 3-Step Quickstart
 1. Install the **Authensor Gateway** skill from the OpenClaw marketplace: https://www.clawhub.ai/AUTHENSOR/authensor-gateway
    Or copy from `skills/authensor-gateway` in this repo.
-2. Request a demo key: https://forms.gle/QdfeWAr2G4pc8GxQA
+2. Request a demo key: https://forms.gle/QdfeWAr2G4pc8GxQA (keys are emailed automatically)
 3. Paste the key once, start a new session, and run any marketplace skill.
 
 ## Add Your Demo Key
@@ -62,12 +62,17 @@ That means you’re not approving every single step — only the risky ones.
 - Tight rate limits
 - Short receipt retention
 - Custom policies unlocked on paid tiers
+- Demo keys auto-expire after 7 days (upgrade email sent)
 
 ## Get Demo Key Access
 Form: https://forms.gle/QdfeWAr2G4pc8GxQA
 
 We use **Google Form + Apps Script** so there’s no public API to run.
 See `apps-script/README.md` to set it up in under 10 minutes.
+
+## Approvals by Email
+Approvals can be handled by email with signed links (no UI required).
+Setup is in `apps-script/README.md`.
 
 ## Marketplace Stub
 This repo includes a tiny marketplace stub skill in `skills/authensor-gateway`. You can publish that stub and point the listing back here as the canonical landing page.
