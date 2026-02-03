@@ -79,6 +79,7 @@ function sendApprovalEmails() {
 
       var ts = now.toString();
       var approve = buildSignedLink(approvalUrl, r.id, 'approve', ts);
+      var allow = buildSignedLink(approvalUrl, r.id, 'allow', ts);
       var reject = buildSignedLink(approvalUrl, r.id, 'reject', ts);
 
       var actionType = (r.envelope && r.envelope.action && r.envelope.action.type) || 'unknown';
@@ -93,7 +94,8 @@ function sendApprovalEmails() {
         'Principal: ' + principal,
         'Receipt ID: ' + r.id,
         '',
-        'Approve: ' + approve,
+        'Approve once: ' + approve,
+        'Always allow: ' + allow,
         'Reject: ' + reject,
         '',
         'This link expires in ' + ttlMinutes + ' minutes.',
@@ -120,7 +122,7 @@ function doGet(e) {
     var sig = (e && e.parameter && e.parameter.sig) || '';
 
     if (!rid || !action || !ts || !sig) return html('Missing parameters.');
-    if (action !== 'approve' && action !== 'reject') return html('Invalid action.');
+    if (action !== 'approve' && action !== 'reject' && action !== 'allow') return html('Invalid action.');
 
     var ttlMinutes = parseInt(getPropOptional('APPROVAL_LINK_TTL_MINUTES', '1440'), 10);
     if (!isValidSignature(rid, action, ts, sig, ttlMinutes)) {
@@ -129,17 +131,29 @@ function doGet(e) {
 
     var baseUrl = getProp('CONTROL_PLANE_URL');
     var adminToken = getProp('AUTHENSOR_ADMIN_TOKEN');
-    var url = baseUrl.replace(/\/$/, '') + '/approvals/' + rid + '/' + action;
 
-    var res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      headers: { Authorization: 'Bearer ' + adminToken },
-    });
+    if (action === 'allow') {
+      var receipt = getReceiptById(baseUrl, adminToken, rid);
+      if (!receipt || !receipt.envelope || !receipt.envelope.action) {
+        return html('Receipt not found or missing action.');
+      }
+      var actionType = receipt.envelope.action.type;
+      var resource = receipt.envelope.action.resource;
+      if (!actionType || !resource) {
+        return html('Missing action type or resource.');
+      }
 
-    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      upsertAlwaysAllowRule(baseUrl, adminToken, actionType, resource);
+      // Approve the current receipt as well
+      postApproval(baseUrl, adminToken, rid, 'approve');
+      return html('Success: always allow enabled and receipt approved.');
+    }
+
+    var res = postApproval(baseUrl, adminToken, rid, action);
+    if (res && res.ok) {
       return html('Success: ' + action + 'd.');
     }
-    return html('Failed: ' + res.getContentText());
+    return html('Failed: ' + (res && res.error ? res.error : 'Unknown error'));
   } catch (err) {
     return html(err && err.message ? err.message : 'Unknown error.');
   }
@@ -153,6 +167,102 @@ function listPendingApprovals(baseUrl, token) {
   });
   var data = JSON.parse(res.getContentText());
   return (data && data.receipts) ? data.receipts : [];
+}
+
+function getReceiptById(baseUrl, token, receiptId) {
+  var url = baseUrl.replace(/\/$/, '') + '/receipts/' + receiptId;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  var data = JSON.parse(res.getContentText());
+  return data;
+}
+
+function postApproval(baseUrl, token, receiptId, action) {
+  var url = baseUrl.replace(/\/$/, '') + '/approvals/' + receiptId + '/' + action;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) return { ok: true };
+  return { ok: false, error: res.getContentText() };
+}
+
+function upsertAlwaysAllowRule(baseUrl, token, actionType, resource) {
+  var active = getActivePolicy(baseUrl, token);
+  var basePolicy = active && active.policy ? active.policy : null;
+
+  if (!basePolicy) {
+    basePolicy = {
+      id: 'openclaw-beta-default',
+      name: 'OpenClaw Beta Default Risk Policy',
+      version: 'v1',
+      rules: [],
+      defaultEffect: 'deny'
+    };
+  }
+
+  var ruleId = 'allow-' + shortHash(actionType + '|' + resource);
+  var allowRule = {
+    id: ruleId,
+    effect: 'allow',
+    description: 'Always allow ' + actionType,
+    condition: {
+      all: [
+        { field: 'action.type', operator: 'eq', value: actionType },
+        { field: 'action.resource', operator: 'eq', value: resource }
+      ]
+    }
+  };
+
+  var rules = basePolicy.rules || [];
+  rules = rules.filter(function (r) { return r && r.id !== ruleId; });
+  rules.unshift(allowRule);
+
+  var newPolicy = JSON.parse(JSON.stringify(basePolicy));
+  newPolicy.rules = rules;
+  newPolicy.version = String(basePolicy.version || 'v1') + '-allow-' + String(Date.now());
+
+  createPolicy(baseUrl, token, newPolicy);
+  setActivePolicy(baseUrl, token, newPolicy.id, newPolicy.version);
+}
+
+function getActivePolicy(baseUrl, token) {
+  var url = baseUrl.replace(/\/$/, '') + '/policies/active';
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      return JSON.parse(res.getContentText());
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
+function createPolicy(baseUrl, token, policy) {
+  var url = baseUrl.replace(/\/$/, '') + '/policies';
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(policy),
+    headers: { Authorization: 'Bearer ' + token },
+  });
+}
+
+function setActivePolicy(baseUrl, token, policyId, version) {
+  var url = baseUrl.replace(/\/$/, '') + '/policies/active';
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ policy_id: policyId, version: version }),
+    headers: { Authorization: 'Bearer ' + token },
+  });
 }
 
 function buildSignedLink(baseUrl, rid, action, ts) {

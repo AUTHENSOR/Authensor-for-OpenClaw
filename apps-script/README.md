@@ -52,6 +52,14 @@ This script can send approval emails and handle approve/reject links.
 Links are signed with `APPROVAL_SIGNING_SECRET` and expire after 24h by default.
 You can change the TTL with `APPROVAL_LINK_TTL_MINUTES`.
 
+### Always Allow (Policy Update)
+Approval emails include an **Always allow** link. It will:
+- Create a new policy version that allows the specific `action.type` + `action.resource`
+- Set that policy as active
+- Approve the current receipt
+
+This is global (applies to all users), so use it for actions you trust.
+
 ### Optional Tuning
 - `APPROVAL_LINK_TTL_MINUTES` (default 1440)
 - `APPROVAL_EMAIL_COOLDOWN_MINUTES` (default 5)
