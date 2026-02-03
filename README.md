@@ -3,7 +3,8 @@
 **One job:** stop risky marketplace actions from running without you knowing.
 
 ## 3-Step Quickstart
-1. Install the **Authensor Gateway** skill from the OpenClaw marketplace (or copy from `skills/authensor-gateway` in this repo).
+1. Install the **Authensor Gateway** skill from the OpenClaw marketplace: https://www.clawhub.ai/AUTHENSOR/authensor-gateway
+   Or copy from `skills/authensor-gateway` in this repo.
 2. Request a demo key: https://forms.gle/QdfeWAr2G4pc8GxQA
 3. Paste the key once, start a new session, and run any marketplace skill.
 

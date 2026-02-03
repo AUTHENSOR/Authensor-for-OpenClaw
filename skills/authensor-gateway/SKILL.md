@@ -6,6 +6,7 @@ metadata:
   openclaw:
     skillKey: authensor-gateway
     homepage: https://github.com/AUTHENSOR/Authensor-for-OpenClaw
+    marketplace: https://www.clawhub.ai/AUTHENSOR/authensor-gateway
     primaryEnv: AUTHENSOR_API_KEY
     requires:
       env:
