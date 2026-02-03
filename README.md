@@ -63,6 +63,7 @@ That means you’re not approving every single step — only the risky ones.
 - Short receipt retention
 - Custom policies unlocked on paid tiers
 - Demo keys auto-expire after 7 days (upgrade email sent)
+ - Optional email domain allowlist for demo keys (see `apps-script/README.md`)
 
 ## Get Demo Key Access
 Form: https://forms.gle/QdfeWAr2G4pc8GxQA
