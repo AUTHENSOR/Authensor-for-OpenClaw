@@ -19,28 +19,32 @@ function onFormSubmit(e) {
     storeDemoKey(email, executor.keyId, 'executor');
 
     var bodyLines = [
-      'Your Authensor demo keys:',
+      'Your Authensor OpenClaw demo keys (requested from the Authensor demo form):',
       '',
-      'CONTROL_PLANE_URL: ' + baseUrl,
-      'EXECUTOR KEY (OpenClaw): ' + executor.token,
-      'INGEST KEY (SDK only): ' + ingest.token,
+      '1) Control plane URL:',
+      '   ' + baseUrl,
+      '2) Executor key (paste into OpenClaw):',
+      '   ' + executor.token,
+      '3) Ingest key (SDK only):',
+      '   ' + ingest.token,
       '',
       'Trial: ' + trialDays + ' days (keys auto-expire).',
       '',
-      'OpenClaw setup (add to ~/.openclaw/openclaw.json):',
+      'Quick setup (add to ~/.openclaw/openclaw.json):',
       'skills: { entries: { "authensor-gateway": { enabled: true, env: {',
       '  CONTROL_PLANE_URL: "' + baseUrl + '",',
       '  AUTHENSOR_API_KEY: "' + executor.token + '"',
       '} } } }',
       '',
-      'Full setup guide: https://github.com/AUTHENSOR/Authensor-for-OpenClaw'
+      'Full setup guide:',
+      'https://github.com/AUTHENSOR/Authensor-for-OpenClaw'
     ];
 
     if (upgradeUrl) {
       bodyLines.push('Upgrade: ' + upgradeUrl);
     }
 
-    var body = bodyLines.join('\\n');
+    var body = bodyLines.join('\n');
 
     MailApp.sendEmail({
       to: email,
@@ -123,7 +127,8 @@ function doGet(e) {
     var sig = (e && e.parameter && e.parameter.sig) || '';
 
     if (!rid || !action || !ts || !sig) return html('Missing parameters.');
-    if (action !== 'approve' && action !== 'reject' && action !== 'allow') return html('Invalid action.');
+    var validActions = ['approve', 'reject', 'allow', 'allow_confirm'];
+    if (validActions.indexOf(action) === -1) return html('Invalid action.');
 
     var ttlMinutes = parseInt(getPropOptional('APPROVAL_LINK_TTL_MINUTES', '1440'), 10);
     if (!isValidSignature(rid, action, ts, sig, ttlMinutes)) {
@@ -133,6 +138,7 @@ function doGet(e) {
     var baseUrl = getProp('CONTROL_PLANE_URL');
     var adminToken = getProp('AUTHENSOR_ADMIN_TOKEN');
 
+    // Step 1: "allow" shows confirmation page
     if (action === 'allow') {
       var receipt = getReceiptById(baseUrl, adminToken, rid);
       if (!receipt || !receipt.envelope || !receipt.envelope.action) {
@@ -144,10 +150,29 @@ function doGet(e) {
         return html('Missing action type or resource.');
       }
 
+      // Generate confirmation link (short TTL: 10 minutes)
+      var confirmTs = Date.now().toString();
+      var approvalUrl = getProp('APPROVAL_WEBAPP_URL');
+      var confirmLink = buildSignedLink(approvalUrl, rid, 'allow_confirm', confirmTs);
+
+      return htmlConfirmation(actionType, resource, confirmLink);
+    }
+
+    // Step 2: "allow_confirm" actually mutates the policy
+    if (action === 'allow_confirm') {
+      var receipt = getReceiptById(baseUrl, adminToken, rid);
+      if (!receipt || !receipt.envelope || !receipt.envelope.action) {
+        return html('Receipt not found or missing action.');
+      }
+      var actionType = receipt.envelope.action.type;
+      var resource = receipt.envelope.action.resource;
+      if (!actionType || !resource) {
+        return html('Missing action type or resource.');
+      }
+
       upsertAlwaysAllowRule(baseUrl, adminToken, actionType, resource);
-      // Approve the current receipt as well
       postApproval(baseUrl, adminToken, rid, 'approve');
-      return html('Success: always allow enabled and receipt approved.');
+      return html('Success: always-allow rule created and receipt approved.');
     }
 
     var res = postApproval(baseUrl, adminToken, rid, action);
@@ -158,6 +183,51 @@ function doGet(e) {
   } catch (err) {
     return html(err && err.message ? err.message : 'Unknown error.');
   }
+}
+
+function htmlConfirmation(actionType, resource, confirmLink) {
+  var safeAction = escapeHtml(actionType);
+  var safeResource = escapeHtml(resource);
+  var safeLink = escapeHtml(confirmLink);
+
+  var page = [
+    '<!DOCTYPE html><html><head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>Confirm Always Allow</title>',
+    '<style>',
+    'body { font-family: system-ui, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }',
+    '.warn { background: #fff3cd; border: 1px solid #ffc107; padding: 16px; border-radius: 8px; margin-bottom: 20px; }',
+    '.action { font-family: monospace; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }',
+    '.btn { display: inline-block; padding: 12px 24px; background: #dc3545; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 16px; }',
+    '.btn:hover { background: #c82333; }',
+    '</style>',
+    '</head><body>',
+    '<h2>Confirm: Always Allow</h2>',
+    '<div class="warn">',
+    '<strong>Warning:</strong> This will permanently allow all future requests matching:',
+    '<ul>',
+    '<li>Action: <span class="action">' + safeAction + '</span></li>',
+    '<li>Resource: <span class="action">' + safeResource + '</span></li>',
+    '</ul>',
+    '<p>No further approvals will be required for this action type.</p>',
+    '</div>',
+    '<p>Are you sure you want to create this permanent allow rule?</p>',
+    '<a class="btn" href="' + safeLink + '">Yes, Always Allow</a>',
+    '</body></html>'
+  ].join('\n');
+
+  return HtmlService.createHtmlOutput(page)
+    .setTitle('Confirm Always Allow');
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // --- Rate limit webhook receiver (email) ---
@@ -512,7 +582,7 @@ function sendUpgradeEmail(email, trialDays) {
     'Upgrade to keep protections and unlock higher limits, custom policies, and longer retention.',
     '',
     upgradeUrl ? ('Upgrade: ' + upgradeUrl) : 'Reply to this email to upgrade.'
-  ].join('\\n');
+  ].join('\n');
 
   MailApp.sendEmail({
     to: email,
