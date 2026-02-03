@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Authensor OpenClaw Demo Keys</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8f7f4;
+        --fg: #0d0d0d;
+        --muted: #5f5f5f;
+        --accent: #0f766e;
+        --border: #e2e0da;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Suisse Intl", "Neue Haas Grotesk", "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 20px 80px;
+      }
+      h1 {
+        font-size: 32px;
+        margin: 0 0 12px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .card {
+        background: white;
+        border: 1px solid var(--border);
+        padding: 20px;
+        border-radius: 12px;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-size: 16px;
+        margin-bottom: 12px;
+      }
+      button {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 14px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background: #f3f3f1;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Get Your Authensor Demo Key</h1>
+      <p>Marketplace skills fail-closed by default. Request a demo key and enable the Authensor Gateway in OpenClaw.</p>
+
+      <div class="card">
+        <form id="demo-form">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required placeholder="you@domain.com" />
+          <button type="submit">Email Me My Demo Key</button>
+          <div class="status" id="status"></div>
+        </form>
+      </div>
+
+      <div class="footer">
+        Keys are delivered by email. You only need to paste it once in your OpenClaw config under <span class="code">authensor-gateway</span>.
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById('demo-form');
+      const statusEl = document.getElementById('status');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        statusEl.textContent = 'Requesting key...';
+        try {
+          const email = document.getElementById('email').value.trim();
+          const res = await fetch('/api/request-demo-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || 'Request failed');
+          statusEl.textContent = 'Check your email for your demo keys.';
+        } catch (err) {
+          statusEl.textContent = err.message || 'Request failed.';
+        }
+      });
+    </script>
+  </body>
+</html>
