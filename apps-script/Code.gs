@@ -159,6 +159,58 @@ function doGet(e) {
   }
 }
 
+// --- Rate limit webhook receiver (email) ---
+// Script Properties:
+// RATE_LIMIT_NOTIFY_EMAIL (who receives alerts)
+// Optional: RATE_LIMIT_WEBHOOK_TOKEN (shared token in webhook URL query string)
+// Optional: UPGRADE_URL (included in email)
+
+function doPost(e) {
+  try {
+    var expected = getPropOptional('RATE_LIMIT_WEBHOOK_TOKEN', '');
+    var provided = (e && e.parameter && e.parameter.token) || '';
+    if (expected && provided !== expected) return textOutput('Unauthorized');
+
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '';
+    if (!raw) return textOutput('No payload');
+
+    var payload;
+    try { payload = JSON.parse(raw); } catch (err) { return textOutput('Bad JSON'); }
+    if (!payload || payload.event !== 'rate_limit') return textOutput('Ignored');
+
+    var notify = getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
+    if (!notify) return textOutput('No notify email');
+
+    var upgradeUrl = getPropOptional('UPGRADE_URL', '');
+    var body = [
+      'Authensor rate limit hit:',
+      '',
+      'Key: ' + (payload.keyId || 'unknown'),
+      'Role: ' + (payload.role || 'unknown'),
+      'Route: ' + ((payload.method || '') + ' ' + (payload.path || '')).trim(),
+      'Group: ' + (payload.routeGroup || 'unknown'),
+      'Limit: ' + (payload.limit || 'unknown') + ' per minute',
+      'Retry after: ' + (payload.retryAfterSeconds || 'unknown') + 's',
+      'Timestamp: ' + (payload.timestamp || new Date().toISOString()),
+    ];
+
+    if (upgradeUrl) {
+      body.push('', 'Upgrade: ' + upgradeUrl);
+    }
+
+    MailApp.sendEmail({
+      to: notify,
+      subject: 'Authensor rate limit hit',
+      body: body.join('\n'),
+    });
+
+    return textOutput('ok');
+  } catch (err) {
+    Logger.log(err && err.message ? err.message : err);
+    return textOutput('error');
+  }
+}
+
 function listPendingApprovals(baseUrl, token) {
   var url = baseUrl.replace(/\/$/, '') + '/receipts?status=pending&decisionOutcome=require_approval&limit=50';
   var res = UrlFetchApp.fetch(url, {
@@ -410,6 +462,10 @@ function getPropOptional(name, fallback) {
 
 function html(text) {
   return HtmlService.createHtmlOutput('<p>' + String(text) + '</p>');
+}
+
+function textOutput(text) {
+  return ContentService.createTextOutput(String(text));
 }
 
 function getEmailFromEvent(e) {

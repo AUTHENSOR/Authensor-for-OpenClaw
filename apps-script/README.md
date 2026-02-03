@@ -15,6 +15,8 @@ This issues demo keys and emails them from your Google Workspace account (e.g. `
    - `DEMO_TRIAL_DAYS` = `7` (optional)
    - `DEMO_EMAIL_ALLOWLIST` = `gmail.com,company.com` (optional)
    - `UPGRADE_URL` = `https://your-upgrade-page` (optional)
+   - `RATE_LIMIT_NOTIFY_EMAIL` = your email (optional, for rate-limit alerts)
+   - `RATE_LIMIT_WEBHOOK_TOKEN` = random string (optional; used in webhook URL)
 5. Create a trigger:
    - **Triggers → Add Trigger**
    - Choose function: `onFormSubmit`
@@ -63,5 +65,19 @@ This is global (applies to all users), so use it for actions you trust.
 ### Optional Tuning
 - `APPROVAL_LINK_TTL_MINUTES` (default 1440)
 - `APPROVAL_EMAIL_COOLDOWN_MINUTES` (default 5)
+
+## Rate Limit Alerts (Webhook → Email)
+If you set `AUTHENSOR_RATE_LIMIT_WEBHOOK_URL`, the control plane will POST JSON here when a key hits rate limits.
+
+### Webhook URL
+Use the same Apps Script **Web app URL** and add a token:
+```
+https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec?token=YOUR_TOKEN
+```
+Then set:
+- `AUTHENSOR_RATE_LIMIT_WEBHOOK_URL` to the full URL above
+- `RATE_LIMIT_WEBHOOK_TOKEN` to the same token
+
+Apps Script cannot read request headers, so the token must be in the URL query string.
 ## Customize
 - Edit the email subject/body inside `Code.gs`.
