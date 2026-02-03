@@ -4,7 +4,7 @@
 
 ## 3-Step Quickstart
 1. Install the **Authensor Gateway** skill from the OpenClaw marketplace.
-2. Request a demo key (Google Form → keys emailed automatically).
+2. Request a demo key: https://forms.gle/QdfeWAr2G4pc8GxQA
 3. Paste the key once, start a new session, and run any marketplace skill.
 
 ## Add Your Demo Key
@@ -26,7 +26,10 @@ Edit `~/.openclaw/openclaw.json` (JSON5) and add:
 }
 ```
 
-If you use sandboxed OpenClaw sessions, also add:
+Sandboxed OpenClaw sessions (optional):
+
+<details>
+<summary>Sandboxed sessions (optional)</summary>
 
 ```json5
 {
@@ -44,6 +47,7 @@ If you use sandboxed OpenClaw sessions, also add:
   }
 }
 ```
+</details>
 
 ## How Approvals Work (No Pain)
 - **Low-risk actions run automatically.**
@@ -58,7 +62,9 @@ That means you’re not approving every single step — only the risky ones.
 - Short receipt retention
 - Custom policies unlocked on paid tiers
 
-## Request Demo Key (No Server)
+## Get Demo Key Access
+Form: https://forms.gle/QdfeWAr2G4pc8GxQA
+
 We use **Google Form + Apps Script** so there’s no public API to run.
 See `apps-script/README.md` to set it up in under 10 minutes.
 
