@@ -60,6 +60,7 @@ function onFormSubmit(e) {
 // APPROVAL_NOTIFY_EMAIL (who receives approval emails)
 // Optional: APPROVAL_LINK_TTL_MINUTES (default 1440 = 24h)
 // Optional: APPROVAL_EMAIL_COOLDOWN_MINUTES (default 5)
+// Optional: APPROVAL_EMAIL_SEND_ONCE (default true)
 
 function sendApprovalEmails() {
   try {
@@ -350,6 +351,8 @@ function wasRecentlyEmailed(receiptId, minutes) {
   var props = PropertiesService.getScriptProperties();
   var key = 'approval_sent_' + receiptId;
   var last = props.getProperty(key);
+  var sendOnce = getPropOptional('APPROVAL_EMAIL_SEND_ONCE', 'true') === 'true';
+  if (sendOnce) return !!last;
   if (!last) return false;
   return (Date.now() - Number(last)) < minutes * 60 * 1000;
 }

@@ -67,6 +67,7 @@ This is global (applies to all users), so use it for actions you trust.
 ### Optional Tuning
 - `APPROVAL_LINK_TTL_MINUTES` (default 1440)
 - `APPROVAL_EMAIL_COOLDOWN_MINUTES` (default 5)
+- `APPROVAL_EMAIL_SEND_ONCE` (default `true`) - send only once per receipt; set `false` to allow repeat reminders
 
 ## Rate Limit Alerts (Webhook → Email)
 If you set `AUTHENSOR_RATE_LIMIT_WEBHOOK_URL`, the control plane will POST JSON here when a key hits rate limits.
