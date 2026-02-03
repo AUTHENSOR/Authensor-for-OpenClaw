@@ -79,5 +79,9 @@ Then set:
 - `RATE_LIMIT_WEBHOOK_TOKEN` to the same token
 
 Apps Script cannot read request headers, so the token must be in the URL query string.
+
+**Who gets the email**
+- End users get the email if the key was issued by this script (we have their email on record).
+- `RATE_LIMIT_NOTIFY_EMAIL` also receives a copy (optional).
 ## Customize
 - Edit the email subject/body inside `Code.gs`.

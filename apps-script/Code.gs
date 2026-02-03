@@ -178,31 +178,19 @@ function doPost(e) {
     try { payload = JSON.parse(raw); } catch (err) { return textOutput('Bad JSON'); }
     if (!payload || payload.event !== 'rate_limit') return textOutput('Ignored');
 
-    var notify = getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
-    if (!notify) return textOutput('No notify email');
-
     var upgradeUrl = getPropOptional('UPGRADE_URL', '');
-    var body = [
-      'Authensor rate limit hit:',
-      '',
-      'Key: ' + (payload.keyId || 'unknown'),
-      'Role: ' + (payload.role || 'unknown'),
-      'Route: ' + ((payload.method || '') + ' ' + (payload.path || '')).trim(),
-      'Group: ' + (payload.routeGroup || 'unknown'),
-      'Limit: ' + (payload.limit || 'unknown') + ' per minute',
-      'Retry after: ' + (payload.retryAfterSeconds || 'unknown') + 's',
-      'Timestamp: ' + (payload.timestamp || new Date().toISOString()),
-    ];
+    var notify = getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
+    var endUserEmail = getDemoEmailForKeyId(payload.keyId);
 
-    if (upgradeUrl) {
-      body.push('', 'Upgrade: ' + upgradeUrl);
+    if (endUserEmail) {
+      sendRateLimitEmail(endUserEmail, payload, upgradeUrl, true);
     }
 
-    MailApp.sendEmail({
-      to: notify,
-      subject: 'Authensor rate limit hit',
-      body: body.join('\n'),
-    });
+    if (notify && notify !== endUserEmail) {
+      sendRateLimitEmail(notify, payload, upgradeUrl, false);
+    }
+
+    if (!endUserEmail && !notify) return textOutput('No notify email');
 
     return textOutput('ok');
   } catch (err) {
@@ -358,6 +346,30 @@ function markEmailed(receiptId) {
   PropertiesService.getScriptProperties().setProperty('approval_sent_' + receiptId, String(Date.now()));
 }
 
+function sendRateLimitEmail(to, payload, upgradeUrl, isEndUser) {
+  var body = [
+    (isEndUser ? 'Your Authensor limit was hit:' : 'Authensor rate limit hit:'),
+    '',
+    'Key: ' + (payload.keyId || 'unknown'),
+    'Role: ' + (payload.role || 'unknown'),
+    'Route: ' + ((payload.method || '') + ' ' + (payload.path || '')).trim(),
+    'Group: ' + (payload.routeGroup || 'unknown'),
+    'Limit: ' + (payload.limit || 'unknown') + ' per minute',
+    'Retry after: ' + (payload.retryAfterSeconds || 'unknown') + 's',
+    'Timestamp: ' + (payload.timestamp || new Date().toISOString()),
+  ];
+
+  if (upgradeUrl) {
+    body.push('', 'Upgrade: ' + upgradeUrl);
+  }
+
+  MailApp.sendEmail({
+    to: to,
+    subject: isEndUser ? 'Your Authensor limit was hit' : 'Authensor rate limit hit',
+    body: body.join('\n'),
+  });
+}
+
 // --- Demo key lifecycle ---
 // Optional Script Properties:
 // DEMO_TRIAL_DAYS (default 7)
@@ -383,6 +395,19 @@ function storeDemoKey(email, keyId, role) {
     revoked: false
   };
   props.setProperty('demo_key_' + keyId, JSON.stringify(payload));
+}
+
+function getDemoEmailForKeyId(keyId) {
+  if (!keyId) return '';
+  var props = PropertiesService.getScriptProperties();
+  var raw = props.getProperty('demo_key_' + keyId);
+  if (!raw) return '';
+  try {
+    var data = JSON.parse(raw);
+    return data && data.email ? String(data.email) : '';
+  } catch (err) {
+    return '';
+  }
 }
 
 function revokeExpiredDemoKeys() {
