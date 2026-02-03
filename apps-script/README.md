@@ -17,6 +17,8 @@ This issues demo keys and emails them from your Google Workspace account (e.g. `
    - `UPGRADE_URL` = `https://your-upgrade-page` (optional)
    - `RATE_LIMIT_NOTIFY_EMAIL` = your email (optional, for rate-limit alerts)
    - `RATE_LIMIT_WEBHOOK_TOKEN` = random string (optional; used in webhook URL)
+   - `POLICY_ALERT_NOTIFY_EMAIL` = your email (optional, for policy-missing alerts)
+   - `POLICY_ALERT_WEBHOOK_TOKEN` = random string (optional; used in webhook URL)
 5. Create a trigger:
    - **Triggers → Add Trigger**
    - Choose function: `onFormSubmit`
@@ -83,5 +85,13 @@ Apps Script cannot read request headers, so the token must be in the URL query s
 **Who gets the email**
 - End users get the email if the key was issued by this script (we have their email on record).
 - `RATE_LIMIT_NOTIFY_EMAIL` also receives a copy (optional).
+
+## Policy Missing Alerts (Webhook → Email)
+If the control plane detects no active policy, it can POST a `policy_missing` event to the same Apps Script URL.
+
+Set:
+- `AUTHENSOR_POLICY_ALERT_WEBHOOK_URL` to the same exec URL (with a token)
+- `POLICY_ALERT_WEBHOOK_TOKEN` to the same token
+- `POLICY_ALERT_NOTIFY_EMAIL` to receive alerts
 ## Customize
 - Edit the email subject/body inside `Code.gs`.

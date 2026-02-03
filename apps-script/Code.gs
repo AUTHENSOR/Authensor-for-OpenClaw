@@ -162,37 +162,49 @@ function doGet(e) {
 // --- Rate limit webhook receiver (email) ---
 // Script Properties:
 // RATE_LIMIT_NOTIFY_EMAIL (who receives alerts)
+// POLICY_ALERT_NOTIFY_EMAIL (who receives policy-missing alerts; falls back to RATE_LIMIT_NOTIFY_EMAIL)
 // Optional: RATE_LIMIT_WEBHOOK_TOKEN (shared token in webhook URL query string)
-// Optional: UPGRADE_URL (included in email)
+// Optional: POLICY_ALERT_WEBHOOK_TOKEN (shared token for policy alerts)
+// Optional: UPGRADE_URL (included in rate-limit email)
 
 function doPost(e) {
   try {
-    var expected = getPropOptional('RATE_LIMIT_WEBHOOK_TOKEN', '');
-    var provided = (e && e.parameter && e.parameter.token) || '';
-    if (expected && provided !== expected) return textOutput('Unauthorized');
-
     var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '';
     if (!raw) return textOutput('No payload');
 
     var payload;
     try { payload = JSON.parse(raw); } catch (err) { return textOutput('Bad JSON'); }
-    if (!payload || payload.event !== 'rate_limit') return textOutput('Ignored');
+    if (!payload || !payload.event) return textOutput('Ignored');
 
-    var upgradeUrl = getPropOptional('UPGRADE_URL', '');
-    var notify = getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
-    var endUserEmail = getDemoEmailForKeyId(payload.keyId);
+    var expected = getExpectedWebhookToken(payload.event);
+    var provided = (e && e.parameter && e.parameter.token) || '';
+    if (expected && provided !== expected) return textOutput('Unauthorized');
 
-    if (endUserEmail) {
-      sendRateLimitEmail(endUserEmail, payload, upgradeUrl, true);
+    if (payload.event === 'rate_limit') {
+      var upgradeUrl = getPropOptional('UPGRADE_URL', '');
+      var notify = getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
+      var endUserEmail = getDemoEmailForKeyId(payload.keyId);
+
+      if (endUserEmail) {
+        sendRateLimitEmail(endUserEmail, payload, upgradeUrl, true);
+      }
+
+      if (notify && notify !== endUserEmail) {
+        sendRateLimitEmail(notify, payload, upgradeUrl, false);
+      }
+
+      if (!endUserEmail && !notify) return textOutput('No notify email');
+      return textOutput('ok');
     }
 
-    if (notify && notify !== endUserEmail) {
-      sendRateLimitEmail(notify, payload, upgradeUrl, false);
+    if (payload.event === 'policy_missing') {
+      var policyNotify = getPropOptional('POLICY_ALERT_NOTIFY_EMAIL', '') || getPropOptional('RATE_LIMIT_NOTIFY_EMAIL', '');
+      if (!policyNotify) return textOutput('No notify email');
+      sendPolicyMissingEmail(policyNotify, payload);
+      return textOutput('ok');
     }
 
-    if (!endUserEmail && !notify) return textOutput('No notify email');
-
-    return textOutput('ok');
+    return textOutput('Ignored');
   } catch (err) {
     Logger.log(err && err.message ? err.message : err);
     return textOutput('error');
@@ -370,6 +382,25 @@ function sendRateLimitEmail(to, payload, upgradeUrl, isEndUser) {
   });
 }
 
+function sendPolicyMissingEmail(to, payload) {
+  var body = [
+    'Authensor policy missing:',
+    '',
+    'Org: ' + (payload.orgId || 'default'),
+    'Env: ' + (payload.environment || 'dev'),
+    'Receipt ID: ' + (payload.receiptId || 'unknown'),
+    'Action: ' + (payload.actionType || 'unknown'),
+    'Principal: ' + (payload.principalId || 'unknown'),
+    'Timestamp: ' + (payload.timestamp || new Date().toISOString()),
+  ];
+
+  MailApp.sendEmail({
+    to: to,
+    subject: 'Authensor policy missing',
+    body: body.join('\n'),
+  });
+}
+
 // --- Demo key lifecycle ---
 // Optional Script Properties:
 // DEMO_TRIAL_DAYS (default 7)
@@ -408,6 +439,13 @@ function getDemoEmailForKeyId(keyId) {
   } catch (err) {
     return '';
   }
+}
+
+function getExpectedWebhookToken(eventName) {
+  if (eventName === 'policy_missing') {
+    return getPropOptional('POLICY_ALERT_WEBHOOK_TOKEN', '');
+  }
+  return getPropOptional('RATE_LIMIT_WEBHOOK_TOKEN', '');
 }
 
 function revokeExpiredDemoKeys() {
