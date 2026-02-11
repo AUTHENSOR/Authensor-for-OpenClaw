@@ -1,6 +1,6 @@
 ---
 name: Authensor Gateway
-version: 0.5.0
+version: 0.5.1
 description: >
   Fail-safe policy gate for OpenClaw marketplace skills.
   Intercepts tool calls before execution and checks them against
@@ -128,23 +128,6 @@ The control plane returns:
 - **Never expose the AUTHENSOR_API_KEY** to the user or in output.
 - **Classify conservatively.** If unsure whether an action is safe, use the more restrictive type.
 
-## Action Classification Reference
-
-Detailed classification rules for edge cases:
-
-| Pattern | Action type | Rationale |
-|---------|------------|-----------|
-| `Bash "git status"`, `Bash "git log"`, `Bash "git diff"` | `safe.read` | Read-only git operations |
-| `Bash "git push"`, `Bash "git commit"` | `code.exec` | Mutating git operations |
-| `Bash "npm test"`, `Bash "pytest"` | `code.exec` | Test runners can have side effects |
-| `Bash "curl ..."`, `Bash "wget ..."` | `network.http` | Network access |
-| `Bash "docker run ..."` | `code.exec` | Container execution |
-| `Bash "sudo ..."` | `dangerous.privilege_escalation` | Privilege escalation |
-| `Bash "chmod 777 ..."` | `dangerous.permission_change` | Broad permission change |
-| `Bash "export API_KEY=..."` | `secrets.write` | Writing secrets to environment |
-| `Write ~/.ssh/*` or `Write ~/.env` | `secrets.write` | Writing to secret file locations |
-| `Read ~/.ssh/*` or `Read ~/.env` | `secrets.access` | Reading secret file locations |
-
 ## Runtime Behavior
 
 This skill is **instruction-only** — it contains no executable code, no install scripts, and writes nothing to disk. The Agent Protocol above is injected into the agent's system prompt. The agent reads these instructions and checks with the control plane before executing tools.
@@ -249,9 +232,8 @@ If the agent runs tool calls without checking the control plane, the skill may n
 - For stronger enforcement, combine with Docker sandbox mode: [OpenClaw Docker docs](https://docs.openclaw.ai/gateway/security)
 
 **Approval emails not arriving**
-- Approval emails require the Apps Script setup (see `apps-script/README.md`)
-- Check the Apps Script trigger is running every 5 minutes
-- Check your spam folder — emails come from your Google Workspace account
+- Approval emails require additional setup — contact support@authensor.com
+- Check your spam folder
 
 **Control plane unreachable**
 - The agent is instructed to deny all actions if the control plane is down (fail-closed)

@@ -1,6 +1,6 @@
 # Authensor for OpenClaw (Hosted Beta)
 
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
+[![Version](https://img.shields.io/badge/version-0.5.1-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![ClawHub](https://img.shields.io/badge/ClawHub-authensor--gateway-orange)](https://www.clawhub.ai/AUTHENSOR/authensor-gateway)
 
@@ -167,9 +167,7 @@ Found a gap? File an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/
 
 ## Control Plane API
 
-The Authensor control plane exposes a REST API. The agent calls `/decide`; the Apps Script uses the admin endpoints.
-
-### Decision endpoint (called by the agent)
+The agent calls the Authensor control plane before every tool call:
 
 ```
 POST /decide
@@ -184,67 +182,26 @@ Content-Type: application/json
 → { "decision": "require_approval", "receiptId": "rec_abc123" }
 ```
 
-### All endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/decide` | Policy decision for a tool call |
+| `GET` | `/health` | Health check (no auth required) |
 
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| `POST` | `/decide` | Executor | Policy decision for a tool call |
-| `POST` | `/keys` | Admin | Create an API key (ingest or executor role) |
-| `POST` | `/keys/:id/revoke` | Admin | Revoke a key |
-| `GET` | `/receipts?status=pending&decisionOutcome=require_approval` | Admin | List pending approvals |
-| `GET` | `/receipts/:id` | Admin/Executor | Get a single receipt |
-| `POST` | `/approvals/:receiptId/approve` | Admin | Approve a pending action |
-| `POST` | `/approvals/:receiptId/reject` | Admin | Reject a pending action |
-| `GET` | `/policies/active` | Admin | Get the active policy |
-| `POST` | `/policies` | Admin | Create a new policy version |
-| `POST` | `/policies/active` | Admin | Set the active policy version |
-| `GET` | `/health` | None | Health check |
-
-**Authentication**: Admin endpoints require `Authorization: Bearer <admin-token>`. Executor keys (used by the agent) authenticate via `Authorization: Bearer <AUTHENSOR_API_KEY>`.
-
-**Webhook events**: The control plane can POST `rate_limit` and `policy_missing` events to a configured webhook URL. See `apps-script/README.md` for webhook setup.
-
-### View your audit trail
-
-```bash
-# List recent receipts (requires admin token)
-curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-  "$CONTROL_PLANE_URL/receipts?limit=10" | jq '.receipts[] | {id, action: .envelope.action, decision: .decisionOutcome}'
-
-# Check a specific receipt
-curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-  "$CONTROL_PLANE_URL/receipts/rec_abc123" | jq .
-```
-
-### Smoke test
-
-Run the included test script to verify your setup:
-
-```bash
-CONTROL_PLANE_URL=https://authensor-control-plane.onrender.com \
-AUTHENSOR_API_KEY=authensor_demo_... \
-./scripts/test-policy.sh
-```
-
-Or it will auto-read from `~/.openclaw/openclaw.json`.
+Additional admin endpoints for policy management, approvals, and key management are available on paid tiers. Contact support@authensor.com for API documentation.
 
 ## Demo Tier Limits
-- Sandbox mode only (no real API calls)
 - Tight rate limits
 - Short receipt retention (7 days)
 - Custom policies unlocked on paid tiers
 - Demo keys auto-expire after 7 days (upgrade email sent)
- - Optional email domain allowlist for demo keys (see `apps-script/README.md`)
 
 ## Get Demo Key Access
 Form: https://forms.gle/QdfeWAr2G4pc8GxQA
 
-We use **Google Form + Apps Script** so there's no public API to run.
-See `apps-script/README.md` to set it up in under 10 minutes.
+Keys are emailed automatically within minutes.
 
-## Approvals by Email
-Approvals can be handled by email with signed links (no UI required).
-Setup is in `apps-script/README.md`.
+## Approvals
+When an action requires approval, you'll receive an email with signed approve/reject links. No dashboard or CLI required.
 
 ## Verify It's Working
 
@@ -285,9 +242,9 @@ If the agent runs tool calls without checking the control plane, the skill may n
 <details>
 <summary>Approval emails not arriving</summary>
 
-- Requires the Apps Script setup — see `apps-script/README.md`
-- Check the trigger is running every 5 minutes
-- Check spam — emails come from your Google Workspace account
+- Check your spam folder
+- Demo tier emails may take up to 5 minutes
+- Contact support@authensor.com if emails don't arrive
 </details>
 
 <details>
@@ -298,60 +255,9 @@ If the agent runs tool calls without checking the control plane, the skill may n
 - If unreachable, the agent is instructed to deny all actions (fail-closed by instruction)
 </details>
 
-## Repo Layout
-
-```
-skills/authensor-gateway/
-  SKILL.md            Skill manifest + agent protocol (injected into system prompt)
-policies/
-  default.json        Default deny-by-default policy (10 rules)
-  schema.json         JSON Schema for policy validation
-apps-script/
-  Code.gs             Google Apps Script (key issuance, approvals, webhooks)
-  README.md           Apps Script setup guide
-scripts/
-  test-policy.sh      Smoke test your setup against the control plane
-CHANGELOG.md          Version history
-LICENSE               MIT
-```
-
 ## Custom Policies
 
-The default policy is in `policies/default.json`. You can create custom policies using the schema in `policies/schema.json`.
-
-Policy rules use first-match-wins ordering. Each rule has:
-- **`effect`**: `allow`, `deny`, or `require_approval`
-- **`condition`**: match on `action.type`, `action.resource`, or `tool` using operators like `eq`, `contains`, `starts_with`, or `matches` (regex)
-
-Example: allow all reads within a specific project directory:
-
-```json
-{
-  "id": "allow-project-reads",
-  "effect": "allow",
-  "description": "Allow reading files within the project directory",
-  "condition": {
-    "all": [
-      { "field": "action.type", "operator": "eq", "value": "safe.read" },
-      { "field": "action.resource", "operator": "starts_with", "value": "/home/user/my-project/" }
-    ]
-  }
-}
-```
-
-Upload custom policies via the API:
-
-```bash
-curl -X POST "$CONTROL_PLANE_URL/policies" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @policies/default.json
-
-curl -X POST "$CONTROL_PLANE_URL/policies/active" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"policy_id":"openclaw-beta-default","version":"v1"}'
-```
+Custom policy rules are available on paid tiers. Contact support@authensor.com to define allow/deny/require_approval rules for specific action types, resource paths, and tools.
 
 ## OpenClaw References
 - Skills config: https://docs.openclaw.ai/tools/skills-config
