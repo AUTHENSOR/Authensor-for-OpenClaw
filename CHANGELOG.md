@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0] - 2026-02-11
+
+### Added
+- **Code-level enforcement hook (`hooks/authensor-gate.sh`)** — `PreToolUse` shell script that runs outside the LLM process, providing bypass-proof policy enforcement the agent cannot override
+- **Deterministic action classification** — regex-based classification in code, not model-driven self-report
+- **Deterministic secret redaction** — credentials stripped from commands/URLs in code before control plane transmission
+- **Two-tier enforcement model** — prompt-level (SKILL.md) + hook-level (`authensor-gate.sh`) for defense-in-depth
+- Hook setup instructions in README (3-step: copy script, export env vars, add to settings.json)
+- Architecture diagram showing dual enforcement path
+
+### Changed
+- README rewritten around two-tier enforcement model with updated Security table (8 properties)
+- SKILL.md "How Enforcement Works" section now describes both layers with cross-references
+- Limitations section updated — most prompt-level limitations resolved by enabling the hook
+- Security table: "True fail-closed" (code-level via hook), "Bypass-proof" (OS-level enforcement), "Deterministic classification/redaction"
+
 ## [0.6.0] - 2026-02-11
 
 ### Fixed

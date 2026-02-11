@@ -1,6 +1,6 @@
 # Authensor for OpenClaw (Hosted Beta)
 
-[![Version](https://img.shields.io/badge/version-0.6.0-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![ClawHub](https://img.shields.io/badge/ClawHub-authensor--gateway-orange)](https://www.clawhub.ai/AUTHENSOR/authensor-gateway)
 
@@ -9,20 +9,26 @@
 ```
 You (OpenClaw user)
  │
- ├── Install Authensor Gateway skill
+ ├── Install Authensor skill + hook
  ├── Paste demo key
  └── Start session
       │
       ▼
-Agent (system prompt includes Authensor protocol)
+Agent attempts a tool call
  │
- ├── Before every tool call:
- │    POST /decide → Control Plane
- │    ← allow / deny / require_approval
+ ├─ HOOK (authensor-gate.sh) ──── runs BEFORE tool executes
+ │   │                            (OS-level — LLM cannot bypass)
+ │   ├── Classify action (deterministic code)
+ │   ├── Redact secrets (deterministic code)
+ │   ├── POST /decide → Control Plane
+ │   │    ← allow / deny / require_approval
+ │   │
+ │   ├── allow → tool executes
+ │   ├── deny → blocked
+ │   └── require_approval → user prompted to approve
  │
- ├── allow → execute tool
- ├── deny → block + tell user
- └── require_approval → pause + notify → wait for human decision
+ └─ SKILL (system prompt) ─────── additional protocol instructions
+                                   (defense-in-depth layer)
 ```
 
 ## 3-Step Quickstart
@@ -50,7 +56,46 @@ Edit `~/.openclaw/openclaw.json` (JSON5) and add:
 }
 ```
 
-Sandboxed OpenClaw sessions (optional):
+## Enable Hook Enforcement (Recommended)
+
+The hook gives you **bypass-proof enforcement** — the LLM cannot skip or override it.
+
+**Requirements:** `jq` and `curl` (pre-installed on most systems).
+
+**1. Copy the hook script:**
+```bash
+mkdir -p ~/.authensor
+cp hooks/authensor-gate.sh ~/.authensor/
+chmod +x ~/.authensor/authensor-gate.sh
+```
+
+**2. Export env vars** (add to your shell profile):
+```bash
+export CONTROL_PLANE_URL="https://authensor-control-plane.onrender.com"
+export AUTHENSOR_API_KEY="authensor_demo_..."
+```
+
+**3. Add the hook to your OpenClaw settings** (`~/.openclaw/settings.json`):
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.authensor/authensor-gate.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The empty `matcher` matches **all tools**. Every tool call will be checked with the control plane before execution. Start a new OpenClaw session for the hook to take effect.
 
 <details>
 <summary>Sandboxed sessions (optional)</summary>
@@ -75,22 +120,29 @@ Sandboxed OpenClaw sessions (optional):
 
 ## How It Works
 
-This skill is **instruction-only** — no executable code, no install scripts, nothing written to disk. It adds policy-check instructions to the agent's system prompt.
+Authensor has **two enforcement layers** — use either or both:
+
+| Layer | How it works | Can the LLM bypass it? |
+|-------|-------------|----------------------|
+| **Prompt-level** (SKILL.md) | Instructions in the system prompt tell the agent to check with the control plane before every tool call | Unlikely but theoretically possible via prompt injection |
+| **Hook-level** (authensor-gate.sh) | A `PreToolUse` hook script runs **outside the LLM process** and blocks tool calls before they execute | **No** — runs as OS-level code, not LLM instructions |
 
 When the agent attempts a tool call:
 
-1. A **policy check request** is sent to the Authensor control plane
-2. The control plane evaluates it against your policy and returns: `allow`, `deny`, or `require_approval`
-3. If `require_approval`: the agent pauses and waits for you to approve or reject
-4. The agent only proceeds if the action is explicitly allowed
+1. The hook script intercepts the call before execution
+2. It classifies the action and calls the Authensor control plane
+3. The control plane returns: `allow`, `deny`, or `require_approval`
+4. `allow` → tool executes. `deny` → blocked. `require_approval` → user prompted to approve.
 
-### How enforcement works
+### Prompt-level enforcement (the skill)
 
-Authensor uses **prompt-level enforcement**: the skill injects policy-check instructions into the system prompt. The agent reads these instructions and checks with the control plane before executing tools.
+The SKILL.md injects policy-check instructions into the system prompt. LLMs generally follow these instructions reliably. This layer works on its own — no hook setup required.
 
-This is currently the only enforcement model available on OpenClaw — there are no runtime `preToolExecution` hooks in production yet. When OpenClaw ships code-level hooks (see [Issue #10502](https://github.com/openclaw/openclaw/issues/10502)), Authensor will add a code component for runtime-level enforcement that cannot be bypassed.
+### Hook-level enforcement (recommended)
 
-For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox](https://docs.openclaw.ai/gateway/security) mode.
+The `authensor-gate.sh` hook runs as a `PreToolUse` shell command **outside the agent's context**. The LLM cannot override, ignore, or bypass a shell script. Classification and redaction are deterministic code, not model-driven.
+
+Both layers call the same control plane and use the same API key. Using both together gives defense-in-depth.
 
 ### What data is sent to the control plane
 
@@ -149,11 +201,9 @@ That means you're not approving every single step — only the risky ones.
 
 We believe in shipping honestly. Here's what Authensor can and cannot do today:
 
-- **Prompt-level enforcement only.** The gate is system prompt instructions, not executable code. LLMs generally follow system prompt instructions reliably, but this is not a cryptographic guarantee.
-- **No runtime hooks yet.** OpenClaw does not expose `preToolExecution` hooks. When it does, Authensor will ship bypass-proof code-level enforcement.
-- **Action classification is model-driven.** The agent self-classifies actions. Combine with Docker sandbox mode for defense-in-depth.
-- **Network dependency.** The control plane must be reachable. Offline use is not supported.
-- **5-minute approval latency.** Email-based approvals poll on a timer. Real-time channels are on the roadmap.
+- **Prompt-level enforcement is advisory.** Without the hook, the gate is system prompt instructions. LLMs generally follow them, but a prompt injection could theoretically bypass them. **Fix: enable the hook** (`authensor-gate.sh`) for code-level enforcement the LLM cannot override.
+- **Network dependency.** The control plane must be reachable for policy checks. If unreachable, the hook denies all actions (fail-closed in code, not just in instructions).
+- **Hook requires `jq` and `curl`.** Both are pre-installed on macOS and most Linux distributions.
 - **Demo tier is sandboxed.** Rate limits, short retention, restricted customization.
 
 Found a gap? File an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/issues
@@ -162,12 +212,14 @@ Found a gap? File an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/
 
 | Property | Detail |
 |----------|--------|
-| **Instruction-only** | No code installed, no files written, no processes spawned |
+| **Two enforcement layers** | Prompt-level (SKILL.md) + hook-level (`authensor-gate.sh`) — use both for defense-in-depth |
+| **Hook is bypass-proof** | `PreToolUse` hook runs as OS-level code outside the LLM — cannot be overridden by prompt injection |
+| **True fail-closed** | Hook denies all actions if the control plane is unreachable (code-level, not instruction-level) |
+| **Deterministic classification** | Hook classifies actions in code (regex), not via LLM self-report |
+| **Deterministic redaction** | Hook strips credentials from commands/URLs in code before transmission |
 | **User-invoked only** | `disable-model-invocation: true` — the agent cannot load this skill autonomously |
-| **Instructed fail-closed** | If unreachable, the agent is instructed to deny all actions (prompt-level, not runtime-enforced — see [Limitations](#limitations)) |
 | **Minimal data** | Only action metadata (type + redacted resource) transmitted — secrets stripped before sending |
 | **Open source** | Full source in this repo — MIT license |
-| **Env vars declared** | `CONTROL_PLANE_URL` and `AUTHENSOR_API_KEY` in `requires.env` frontmatter |
 
 ## Control Plane API
 
