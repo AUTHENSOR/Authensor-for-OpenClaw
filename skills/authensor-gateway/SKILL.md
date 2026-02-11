@@ -1,6 +1,6 @@
 ---
 name: Authensor Gateway
-version: 0.4.0
+version: 0.5.0
 description: >
   Fail-safe policy gate for OpenClaw marketplace skills.
   Intercepts tool calls before execution and checks them against
@@ -59,22 +59,101 @@ Here's what Authensor does with real-world tool calls:
 
 A marketplace skill that tries `curl | sh`, exfiltrates data via HTTP, or reads your SSH keys will be caught and either require your approval or be blocked outright.
 
+## Agent Protocol (MANDATORY)
+
+**You MUST follow this protocol before executing any tool call.** No exceptions.
+
+### Step 1: Classify the action
+
+Before each tool call, determine the action type and resource:
+
+| Tool | Action type | Resource |
+|------|------------|----------|
+| `Read`, `Glob`, `Grep` | `safe.read` | The file path or search pattern |
+| `Write` | `filesystem.write` | The target file path |
+| `Edit` | `filesystem.write` | The target file path |
+| `Bash` (read-only: `ls`, `pwd`, `whoami`, `echo`, `cat`) | `safe.read` | The command |
+| `Bash` (all other commands) | `code.exec` | The full command string |
+| `Bash` (contains `rm`, `rmdir`, `del`) | `dangerous.delete` | The full command string |
+| `Bash` (contains `ssh`, `id_rsa`, `.env`, `secret`, `token`, `password`, `credential`) | `secrets.access` | The full command string |
+| `WebFetch`, `WebSearch` | `network.http` | The URL |
+| `NotebookEdit` | `filesystem.write` | The notebook path |
+| MCP tool calls | `mcp.tool` | The tool name and arguments |
+| Any other tool | `unknown` | Tool name |
+
+If a command matches multiple categories, use the **most restrictive** classification.
+
+### Step 2: Check policy with the control plane
+
+Send a POST request to the Authensor control plane **before executing the tool**:
+
+```
+POST ${CONTROL_PLANE_URL}/decide
+Authorization: Bearer ${AUTHENSOR_API_KEY}
+Content-Type: application/json
+
+{
+  "action": {
+    "type": "<action_type>",
+    "resource": "<resource>"
+  },
+  "tool": "<tool_name>"
+}
+```
+
+### Step 3: Follow the decision
+
+The control plane returns:
+
+```json
+{
+  "decision": "allow | deny | require_approval",
+  "receiptId": "rec_..."
+}
+```
+
+- **`allow`** → Execute the tool call normally.
+- **`deny`** → Do NOT execute the tool call. Tell the user: "Action denied by Authensor policy: `<action_type>` on `<resource>` (receipt: `<receiptId>`)."
+- **`require_approval`** → Do NOT execute the tool call yet. Tell the user: "Waiting for approval: `<action_type>` on `<resource>` (receipt: `<receiptId>`). Check your email or approve via CLI: `openclaw approvals approve <receiptId>`." Then **poll** `GET ${CONTROL_PLANE_URL}/receipts/<receiptId>` every 30 seconds until the status changes to `approved` or `rejected`.
+
+### Step 4: Handle errors
+
+- **Control plane unreachable** (network error, timeout, non-2xx response) → **DENY the action.** Tell the user: "Authensor control plane unreachable — action denied (fail-closed). Check connectivity: `curl ${CONTROL_PLANE_URL}/health`."
+- **Invalid API key** (401/403 response) → **DENY the action.** Tell the user: "Authensor API key invalid or expired."
+
+### Important rules
+
+- **Never skip the policy check.** Every tool call must be checked, even if a similar action was recently allowed. Each call gets its own receipt.
+- **Never send file contents, conversation history, or environment variables** in the request. Only send action metadata (type + resource + tool name).
+- **Never expose the AUTHENSOR_API_KEY** to the user or in output.
+- **Classify conservatively.** If unsure whether an action is safe, use the more restrictive type.
+
+## Action Classification Reference
+
+Detailed classification rules for edge cases:
+
+| Pattern | Action type | Rationale |
+|---------|------------|-----------|
+| `Bash "git status"`, `Bash "git log"`, `Bash "git diff"` | `safe.read` | Read-only git operations |
+| `Bash "git push"`, `Bash "git commit"` | `code.exec` | Mutating git operations |
+| `Bash "npm test"`, `Bash "pytest"` | `code.exec` | Test runners can have side effects |
+| `Bash "curl ..."`, `Bash "wget ..."` | `network.http` | Network access |
+| `Bash "docker run ..."` | `code.exec` | Container execution |
+| `Bash "sudo ..."` | `dangerous.privilege_escalation` | Privilege escalation |
+| `Bash "chmod 777 ..."` | `dangerous.permission_change` | Broad permission change |
+| `Bash "export API_KEY=..."` | `secrets.write` | Writing secrets to environment |
+| `Write ~/.ssh/*` or `Write ~/.env` | `secrets.write` | Writing to secret file locations |
+| `Read ~/.ssh/*` or `Read ~/.env` | `secrets.access` | Reading secret file locations |
+
 ## Runtime Behavior
 
-This skill is **instruction-only** — it contains no executable code, no install scripts, and writes nothing to disk. It works by adding policy-check instructions to the agent's system prompt.
-
-When the agent attempts a tool call, the following happens:
-
-1. The agent sends a **policy check request** to the Authensor control plane
-2. The control plane evaluates the request against your policy and returns: `allow`, `deny`, or `require_approval`
-3. If `require_approval`: the agent pauses and waits for you to approve or reject (via email link, dashboard, or CLI)
-4. The agent only proceeds if the action is explicitly allowed
+This skill is **instruction-only** — it contains no executable code, no install scripts, and writes nothing to disk. The Agent Protocol above is injected into the agent's system prompt. The agent reads these instructions and checks with the control plane before executing tools.
 
 **If the control plane is unreachable, the agent is instructed to deny all actions (fail-closed).**
 
 ## How Enforcement Works
 
-Authensor uses **prompt-level enforcement**: the skill injects policy-check instructions into the agent's system prompt. The agent reads these instructions and checks with the control plane before executing tools.
+Authensor uses **prompt-level enforcement**: the skill injects the Agent Protocol (above) into the agent's system prompt. The agent follows this protocol and checks with the control plane before executing tools.
 
 This is currently the only enforcement model available on OpenClaw — there are no runtime `preToolExecution` hooks in production yet. When OpenClaw ships code-level hooks (see [Issue #10502](https://github.com/openclaw/openclaw/issues/10502)), Authensor will add a code component for runtime-level enforcement that cannot be bypassed.
 

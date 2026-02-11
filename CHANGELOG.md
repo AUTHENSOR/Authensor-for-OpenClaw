@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0] - 2026-02-11
+
+### Added
+- **Agent Protocol (MANDATORY)** section in SKILL.md — explicit step-by-step instructions the agent follows to call `/decide` before every tool call
+- **Action Classification Reference** — detailed mapping table for edge cases (git ops, sudo, chmod, secret files, docker, curl/wget)
+- **Default policy** (`policies/default.json`) — 10-rule deny-by-default policy shipped with the repo
+- **Policy schema** (`policies/schema.json`) — JSON Schema for policy validation with `all`/`any` condition logic
+- **Smoke test script** (`scripts/test-policy.sh`) — automated curl-based test against the control plane (health + 8 policy decisions)
+- **Custom Policies** section in README — how to write and upload custom rules
+- **Architecture diagram** in README — visual flow from user → agent → control plane → decision
+- **Audit trail examples** in README — curl commands to query receipts
+- **Badges** in README — version, license, ClawHub marketplace link
+- **Repo Layout** section in README — file-by-file guide
+- `/decide` endpoint documented in Control Plane API table
+
+### Changed
+- README restructured: added repo layout, custom policy guide, receipt viewer, smoke test instructions
+- Control Plane API section now documents the `/decide` decision endpoint (the core agent-facing API)
+
 ## [0.4.0] - 2026-02-11
 
 ### Added
