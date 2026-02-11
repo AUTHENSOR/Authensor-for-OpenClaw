@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0] - 2026-02-11
+
+### Fixed
+- **CRITICAL: Read tool now detects sensitive paths.** `Read`, `Glob`, `Grep` targeting `~/.ssh/*`, `*.env`, `~/.aws/*`, and other sensitive patterns are now classified as `secrets.access` instead of `safe.read`
+- **Safe Bash commands tightened.** Removed `cat` and `echo` from safe command list (both can write via shell redirection). Only `ls`, `pwd`, `whoami` remain safe.
+- **Approval flow docs reconciled.** README no longer claims automatic email approvals — now correctly documents CLI approval as default with email as optional setup
+- **"Fail-closed" language clarified.** Security tables now say "Instructed fail-closed" with cross-reference to Limitations section
+- **Polling timeout added.** Agent now stops polling after 10 minutes (20 attempts) instead of indefinitely
+- **Undocumented endpoint added to README.** `GET /receipts/<receiptId>` now in API table
+- **Expanded error handling.** Added 429 (rate limited) and malformed response handling to Agent Protocol
+- **Expanded redaction patterns.** Added `curl -u`, `git clone` with credentials, `mysql -p`, `--password`/`--token` flag stripping
+- **Removed internal key prefix leak.** Troubleshooting no longer reveals admin key naming convention
+- **Added `unlink`/`truncate` to destructive command detection**
+- Updated examples table: added `Read ~/.ssh/id_rsa` and `Read .env` as denied examples
+
 ## [0.5.2] - 2026-02-11
 
 ### Fixed
