@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - 2026-02-11
+
+### Added
+- **"When to Use This"** section — who the skill is for, with ClawHavoc context
+- **"What Gets Caught"** table — 8 concrete examples of tool calls and their policy outcomes
+- **"Verify It's Working"** section — step-by-step test after setup
+- **Troubleshooting** section — 5 common issues with solutions
+- **Control Plane API** documentation — all REST endpoints used by the skill and Apps Script
+- Collapsible troubleshooting in README
+
+### Changed
+- Demo key email now sends only the executor key (previously sent both ingest + executor)
+- Email includes copy-pasteable JSON config block instead of compact one-liner
+- Email subject changed from "Demo Keys" to "Demo Key" (singular)
+
+### Fixed
+- Users no longer receive an unnecessary ingest key they don't need for OpenClaw
+
 ## [0.3.0] - 2026-02-11
 
 ### Changed
