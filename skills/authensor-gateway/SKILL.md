@@ -1,6 +1,6 @@
 ---
 name: Authensor Gateway
-version: 0.2.0
+version: 0.3.0
 description: >
   Fail-safe policy gate for OpenClaw marketplace skills.
   Intercepts tool calls before execution and checks them against
@@ -42,7 +42,15 @@ When the agent attempts a tool call, the following happens:
 3. If `require_approval`: the agent pauses and waits for you to approve or reject (via email link, dashboard, or CLI)
 4. The agent only proceeds if the action is explicitly allowed
 
-**The agent cannot bypass the gate.** If the control plane is unreachable, all actions are denied (fail-closed).
+**If the control plane is unreachable, the agent is instructed to deny all actions (fail-closed).**
+
+## How Enforcement Works
+
+Authensor uses **prompt-level enforcement**: the skill injects policy-check instructions into the agent's system prompt. The agent reads these instructions and checks with the control plane before executing tools.
+
+This is currently the only enforcement model available on OpenClaw — there are no runtime `preToolExecution` hooks in production yet. When OpenClaw ships code-level hooks (see [Issue #10502](https://github.com/openclaw/openclaw/issues/10502)), Authensor will add a code component for runtime-level enforcement that cannot be bypassed.
+
+For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox](https://docs.openclaw.ai/gateway/security) mode.
 
 ## What Data Is Sent to the Control Plane
 
@@ -89,11 +97,24 @@ Receipts are retained for a limited period (7 days on demo tier). No file conten
 }
 ```
 
+## Limitations
+
+This is an honest accounting of what Authensor can and cannot do today:
+
+- **Prompt-level enforcement only.** The gate is system prompt instructions, not executable code. LLMs generally follow system prompt instructions reliably, but this is not a cryptographic guarantee. A sufficiently adversarial prompt injection could theoretically instruct the agent to skip the check.
+- **No runtime hooks yet.** OpenClaw does not currently expose `preToolExecution` hooks. When it does, Authensor will ship a code component for bypass-proof enforcement.
+- **Action classification is model-driven.** The agent self-classifies actions (e.g. "this is a `filesystem.write`"). A prompt injection could theoretically misclassify an action to bypass a rule. Combine with Docker sandbox mode for defense-in-depth.
+- **Network dependency.** The control plane must be reachable for policy checks. Offline use is not supported.
+- **5-minute approval latency.** Email-based approvals poll on a timer. Real-time approval channels are on the roadmap.
+- **Demo tier is sandboxed.** Demo keys have rate limits, short retention, and restricted policy customization.
+
+We believe in transparency. If you find a gap we missed, file an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/issues
+
 ## Security Notes
 
 - **Instruction-only**: No code is installed, no files are written, no processes are spawned
 - **User-invoked only**: `disable-model-invocation: true` means the agent cannot load this skill autonomously — only you can enable it
-- **Fail-closed**: If the control plane is unreachable, actions are denied (not allowed)
+- **Fail-closed by instruction**: If the control plane is unreachable, the agent is instructed to deny all actions
 - **Minimal data**: Only action metadata (type + resource) is transmitted — never file contents or secrets
-- **Open source**: Full source at https://github.com/AUTHENSOR/Authensor-for-OpenClaw
+- **Open source**: Full source at https://github.com/AUTHENSOR/Authensor-for-OpenClaw (MIT license)
 - **Required env vars declared**: `CONTROL_PLANE_URL` and `AUTHENSOR_API_KEY` are explicitly listed in the `requires.env` frontmatter

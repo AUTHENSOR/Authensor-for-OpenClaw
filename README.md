@@ -50,7 +50,7 @@ Sandboxed OpenClaw sessions (optional):
 ```
 </details>
 
-## How It Works (Runtime Behavior)
+## How It Works
 
 This skill is **instruction-only** — no executable code, no install scripts, nothing written to disk. It adds policy-check instructions to the agent's system prompt.
 
@@ -61,7 +61,13 @@ When the agent attempts a tool call:
 3. If `require_approval`: the agent pauses and waits for you to approve or reject
 4. The agent only proceeds if the action is explicitly allowed
 
-**Fail-closed:** If the control plane is unreachable, all actions are denied.
+### How enforcement works
+
+Authensor uses **prompt-level enforcement**: the skill injects policy-check instructions into the system prompt. The agent reads these instructions and checks with the control plane before executing tools.
+
+This is currently the only enforcement model available on OpenClaw — there are no runtime `preToolExecution` hooks in production yet. When OpenClaw ships code-level hooks (see [Issue #10502](https://github.com/openclaw/openclaw/issues/10502)), Authensor will add a code component for runtime-level enforcement that cannot be bypassed.
+
+For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox](https://docs.openclaw.ai/gateway/security) mode.
 
 ### What data is sent to the control plane
 
@@ -95,15 +101,28 @@ Receipts are retained for a limited period (7 days on demo tier). No file conten
 
 That means you're not approving every single step — only the risky ones.
 
+## Limitations
+
+We believe in shipping honestly. Here's what Authensor can and cannot do today:
+
+- **Prompt-level enforcement only.** The gate is system prompt instructions, not executable code. LLMs generally follow system prompt instructions reliably, but this is not a cryptographic guarantee.
+- **No runtime hooks yet.** OpenClaw does not expose `preToolExecution` hooks. When it does, Authensor will ship bypass-proof code-level enforcement.
+- **Action classification is model-driven.** The agent self-classifies actions. Combine with Docker sandbox mode for defense-in-depth.
+- **Network dependency.** The control plane must be reachable. Offline use is not supported.
+- **5-minute approval latency.** Email-based approvals poll on a timer. Real-time channels are on the roadmap.
+- **Demo tier is sandboxed.** Rate limits, short retention, restricted customization.
+
+Found a gap? File an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/issues
+
 ## Security
 
 | Property | Detail |
 |----------|--------|
 | **Instruction-only** | No code installed, no files written, no processes spawned |
 | **User-invoked only** | `disable-model-invocation: true` — the agent cannot load this skill autonomously |
-| **Fail-closed** | Unreachable control plane = all actions denied |
+| **Fail-closed by instruction** | If unreachable, the agent is instructed to deny all actions |
 | **Minimal data** | Only action metadata (type + resource) transmitted |
-| **Open source** | Full source in this repo |
+| **Open source** | Full source in this repo — MIT license |
 | **Env vars declared** | `CONTROL_PLANE_URL` and `AUTHENSOR_API_KEY` in `requires.env` frontmatter |
 
 ## Demo Tier Limits
