@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2] - 2026-02-11
+
+### Fixed
+- **Registry metadata**: Added `env` declaration inside `metadata.openclaw` so ClawHub correctly displays required environment variables
+- **Resource redaction**: Agent Protocol now includes explicit Step 1b requiring secrets/tokens/query params be stripped from resource values before transmission to control plane
+- Updated "What Data Is Sent" sections in SKILL.md and README to clarify redaction behavior
+
 ## [0.5.1] - 2026-02-11
 
 ### Changed

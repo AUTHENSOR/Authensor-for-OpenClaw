@@ -1,6 +1,6 @@
 ---
 name: Authensor Gateway
-version: 0.5.1
+version: 0.5.2
 description: >
   Fail-safe policy gate for OpenClaw marketplace skills.
   Intercepts tool calls before execution and checks them against
@@ -19,6 +19,9 @@ metadata:
     homepage: https://github.com/AUTHENSOR/Authensor-for-OpenClaw
     marketplace: https://www.clawhub.ai/AUTHENSOR/authensor-gateway
     primaryEnv: AUTHENSOR_API_KEY
+    env:
+      - CONTROL_PLANE_URL
+      - AUTHENSOR_API_KEY
 ---
 
 # Authensor Gateway
@@ -83,6 +86,19 @@ Before each tool call, determine the action type and resource:
 
 If a command matches multiple categories, use the **most restrictive** classification.
 
+### Step 1b: Redact the resource value
+
+Before sending the resource to the control plane, **strip any sensitive data**:
+
+- **URLs**: Remove query parameters and fragments. Send only the scheme + host + path.
+  - `https://api.example.com/data?token=secret` → `https://api.example.com/data`
+- **Commands**: Remove inline environment variables, tokens, and credentials.
+  - `API_KEY=sk-abc123 ./deploy.sh` → `./deploy.sh`
+  - `curl -H "Authorization: Bearer sk-ant-..." https://api.example.com` → `curl https://api.example.com`
+- **File paths**: Send as-is (paths are needed for policy matching) but never include file contents.
+
+The goal: the control plane receives enough to match a policy rule (action type + general resource shape) but never receives secrets, tokens, or credentials.
+
 ### Step 2: Check policy with the control plane
 
 Send a POST request to the Authensor control plane **before executing the tool**:
@@ -146,7 +162,7 @@ For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox]
 
 **Sent** (action metadata only):
 - Action type (e.g. `filesystem.write`, `code.exec`, `network.http`)
-- Resource path (e.g. `/tmp/output.txt`, `https://api.example.com`)
+- Redacted resource identifier (e.g. `/tmp/output.txt`, `https://api.example.com/path` — query params stripped, inline credentials removed)
 - Tool name (e.g. `Bash`, `Write`, `Read`)
 - Your Authensor API key (for authentication)
 
@@ -154,6 +170,7 @@ For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox]
 - Your AI provider API keys (Anthropic, OpenAI, etc.)
 - File contents or conversation history
 - Environment variables (other than `AUTHENSOR_API_KEY`)
+- Tokens, credentials, or secrets from commands or URLs (redacted before transmission)
 - Any data from your filesystem
 
 The control plane returns a single decision (`allow` / `deny` / `require_approval`) and a receipt ID. That's it.

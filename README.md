@@ -1,6 +1,6 @@
 # Authensor for OpenClaw (Hosted Beta)
 
-[![Version](https://img.shields.io/badge/version-0.5.1-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
+[![Version](https://img.shields.io/badge/version-0.5.2-blue)](https://github.com/AUTHENSOR/Authensor-for-OpenClaw/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![ClawHub](https://img.shields.io/badge/ClawHub-authensor--gateway-orange)](https://www.clawhub.ai/AUTHENSOR/authensor-gateway)
 
@@ -98,14 +98,17 @@ For stronger isolation today, combine Authensor with [OpenClaw's Docker sandbox]
 | Field | Example | Purpose |
 |-------|---------|---------|
 | Action type | `filesystem.write` | Policy matching |
-| Resource path | `/tmp/output.txt` | Policy matching |
+| Redacted resource | `/tmp/output.txt` | Policy matching |
 | Tool name | `Bash` | Classification |
 | Authensor API key | `authensor_demo_...` | Authentication |
+
+Resource values are **redacted before transmission**: query parameters are stripped from URLs, inline credentials are removed from commands. Only the structural shape needed for policy matching is sent.
 
 **Never sent:**
 - Your AI provider API keys (Anthropic, OpenAI, etc.)
 - File contents or conversation history
 - Environment variables (other than `AUTHENSOR_API_KEY`)
+- Tokens, credentials, or secrets from commands or URLs
 - Any data from your filesystem
 
 The control plane returns a single decision (`allow` / `deny` / `require_approval`) and a receipt ID. That's it.
@@ -161,7 +164,7 @@ Found a gap? File an issue: https://github.com/AUTHENSOR/Authensor-for-OpenClaw/
 | **Instruction-only** | No code installed, no files written, no processes spawned |
 | **User-invoked only** | `disable-model-invocation: true` — the agent cannot load this skill autonomously |
 | **Fail-closed by instruction** | If unreachable, the agent is instructed to deny all actions |
-| **Minimal data** | Only action metadata (type + resource) transmitted |
+| **Minimal data** | Only action metadata (type + redacted resource) transmitted — secrets stripped before sending |
 | **Open source** | Full source in this repo — MIT license |
 | **Env vars declared** | `CONTROL_PLANE_URL` and `AUTHENSOR_API_KEY` in `requires.env` frontmatter |
 
