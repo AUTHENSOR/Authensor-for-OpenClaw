@@ -47,7 +47,7 @@ Edit `~/.openclaw/openclaw.json` (JSON5) and add:
       "authensor-gateway": {
         enabled: true,
         env: {
-          CONTROL_PLANE_URL: "https://authensor-control-plane.onrender.com",
+          CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
           AUTHENSOR_API_KEY: "authensor_demo_..."
         }
       }
@@ -71,7 +71,7 @@ chmod +x ~/.authensor/authensor-gate.sh
 
 **2. Export env vars** (add to your shell profile):
 ```bash
-export CONTROL_PLANE_URL="https://authensor-control-plane.onrender.com"
+export CONTROL_PLANE_URL="https://authensor-api-production.up.railway.app"
 export AUTHENSOR_API_KEY="authensor_demo_..."
 ```
 
@@ -107,7 +107,7 @@ The empty `matcher` matches **all tools**. Every tool call will be checked with 
       sandbox: {
         docker: {
           env: {
-            CONTROL_PLANE_URL: "https://authensor-control-plane.onrender.com",
+            CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
             AUTHENSOR_API_KEY: "authensor_demo_..."
           }
         }
@@ -308,7 +308,7 @@ If the agent runs tool calls without checking the control plane, the skill may n
 <summary>Control plane unreachable / slow first request</summary>
 
 - The control plane is hosted on Render — first request after idle may take 30-60s (cold start)
-- Test: `curl https://authensor-control-plane.onrender.com/health`
+- Test: `curl https://authensor-api-production.up.railway.app/health`
 - If unreachable, the agent is instructed to deny all actions (fail-closed by instruction)
 </details>
 

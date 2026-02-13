@@ -7,7 +7,7 @@
 # Setup: see README.md in the repo root for installation instructions.
 #
 # Environment variables (required):
-#   CONTROL_PLANE_URL   — e.g. https://authensor-control-plane.onrender.com
+#   CONTROL_PLANE_URL   — e.g. https://authensor-api-production.up.railway.app
 #   AUTHENSOR_API_KEY   — e.g. authensor_demo_...
 #
 # Exit behavior:

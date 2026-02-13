@@ -214,7 +214,7 @@ Receipts are retained for a limited period (7 days on demo tier). No file conten
       "authensor-gateway": {
         enabled: true,
         env: {
-          CONTROL_PLANE_URL: "https://authensor-control-plane.onrender.com",
+          CONTROL_PLANE_URL: "https://authensor-api-production.up.railway.app",
           AUTHENSOR_API_KEY: "authensor_demo_..."
         }
       }
@@ -273,7 +273,7 @@ If the agent runs tool calls without checking the control plane, the skill may n
 
 **Control plane unreachable**
 - The agent is instructed to deny all actions if the control plane is down (fail-closed)
-- Check connectivity: `curl https://authensor-control-plane.onrender.com/health`
+- Check connectivity: `curl https://authensor-api-production.up.railway.app/health`
 - The control plane is hosted on Render — first request after idle may take 30-60s to cold start
 
 ## Limitations
